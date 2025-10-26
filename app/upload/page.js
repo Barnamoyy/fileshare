@@ -156,10 +156,10 @@ export default function UploadPage() {
 
         {shareableUrl && (
           <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <p className="text-sm font-medium text-green-800 mb-2 text-black">
+            <p className="text-sm font-medium text-green-800 mb-2">
               File uploaded successfully!
             </p>
-            <p className="text-sm text-gray-600 mb-2 text-black">
+            <p className="text-sm mb-2 text-black">
               Expires: {expiresAt}
             </p>
             <div className="flex gap-2">
