@@ -2,7 +2,7 @@ name: Cleanup Expired Files
 
 on:
   schedule:
-    - cron: "0 * * * * *" # Runs every day at midnight
+    - cron: "* * * * *" # Runs every day at midnight
 
 jobs:
   cleanup:
