@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { CosmosClient } from '@azure/cosmos';
 
 const cosmosClient = new CosmosClient(process.env.AZURE_COSMOSDB_CONNECTION_STRING);
-const database = cosmosClient.database('fileshare-db');
+const database = cosmosClient.database('fileshareDB');
 const container = database.container('files');
 
 export async function GET(req) {

@@ -8,7 +8,8 @@ import toast from 'react-hot-toast';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
 import Background from "@/assets/background.jpg";
-import CircularProgressBar from '@/components/CircularProgressBar';
+import { signOut } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 
 export default function UploadPage() {
   const { data: session, status } = useSession();
@@ -17,6 +18,7 @@ export default function UploadPage() {
   const [shareableUrl, setShareableUrl] = useState('');
   const [expiryHours, setExpiryHours] = useState(24);
   const [expiresAt, setExpiresAt] = useState('');
+  const router = useRouter(); 
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
@@ -84,10 +86,6 @@ export default function UploadPage() {
     return <p className="text-black">Loading...</p>;
   }
 
-  if (status === "unauthenticated") {
-    return <p className="text-black">Access Denied</p>;
-  }
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
       <Image src={Background} alt='background' className='w-full h-full absolute top-0 left-0 z-10'/>
@@ -133,7 +131,7 @@ export default function UploadPage() {
               min="1"
               max="168"
               value={expiryHours}
-              onChange={(e) => setExpiryHours(parseInt(e.target.value))}
+              onChange={(e) => setExpiryHours(e.target.value)}
               className="w-full p-2 border border-gray-300 rounded text-black"
             />
           </div>
@@ -151,7 +149,7 @@ export default function UploadPage() {
               'Upload'
             )}
           </Button>
-          <Button onClick={() => signOut()} className="w-full text-black">Signout</Button>
+          <Button onClick={() => signOut({ callbackUrl: "/" })} className="w-full text-white">Signout</Button>
         </form>
 
         {shareableUrl && (
