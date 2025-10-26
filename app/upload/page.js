@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
 import Background from "@/assets/background.jpg";
+import CircularProgressBar from '@/components/CircularProgressBar';
 
 export default function UploadPage() {
   const { data: session, status } = useSession();
@@ -144,7 +145,6 @@ export default function UploadPage() {
           >
             {uploading ? (
               <div className="flex items-center justify-center space-x-2 text-black">
-                <CircularProgressBar progress={uploadProgress} />
                 <span>Uploading...</span>
               </div>
             ) : (
