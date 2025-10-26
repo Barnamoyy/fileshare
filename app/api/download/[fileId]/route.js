@@ -5,18 +5,17 @@ import { CosmosClient } from '@azure/cosmos';
 
 // Same encryption config
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = crypto.scRandomBytes(32); // Must match upload key
 const IV_LENGTH = 16;
 
 const cosmosClient = new CosmosClient(process.env.AZURE_COSMOSDB_CONNECTION_STRING);
 const database = cosmosClient.database('fileshareDB');
 const container = database.container('files');
 
-function decryptBuffer(encryptedBuffer) {
-  const iv = encryptedBuffer.slice(0, IV_LENGTH);
-  const encrypted = encryptedBuffer.slice(IV_LENGTH);
+function decryptBuffer(fullEncryptedBuffer, encryptionKey, iv) {
+  const actualIv = Buffer.from(iv, 'hex');
+  const encrypted = fullEncryptedBuffer.slice(actualIv.length);
   
-  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, ENCRYPTION_KEY, iv);
+  const decipher = crypto.createDecipheriv(ENCRYPTION_ALGORITHM, Buffer.from(encryptionKey, 'hex'), actualIv);
   const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
   
   return decrypted;
@@ -24,7 +23,7 @@ function decryptBuffer(encryptedBuffer) {
 
 export async function GET(req, { params }) {
   try {
-    const { fileId } = params;
+    const { fileId } = await params;
 
     // Get file metadata from Cosmos DB
     const { resource: fileMetadata } = await container.item(fileId, fileId).read();
@@ -72,7 +71,7 @@ export async function GET(req, { params }) {
     const encryptedBuffer = await streamToBuffer(downloadResponse.readableStreamBody);
 
     // Decrypt the file
-    const decryptedBuffer = decryptBuffer(encryptedBuffer);
+    const decryptedBuffer = decryptBuffer(encryptedBuffer, fileMetadata.encryptionKey, fileMetadata.iv);
 
     // Update download count
     await container.item(fileId, fileId).patch([

@@ -1,76 +1,130 @@
-'use client';
+"use client";
 
-import { useParams } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import Image from "next/image";
+import Background from "@/assets/background.jpg";
+import CircularProgressBar from "@/components/CircularProgressBar";
 
 export default function DownloadPage() {
-  const params = useParams();
-  const [downloading, setDownloading] = useState(false);
-  const [error, setError] = useState('');
+  const [fileName, setFileName] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [error, setError] = useState("");
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { fileId } = useParams();
+
+  useEffect(() => {
+    const fetchMetadata = async () => {
+      try {
+        const response = await fetch(`/api/metadata/${fileId}`);
+        const data = await response.json();
+
+        if (response.ok) {
+          setFileName(data.fileName);
+          setOwnerName(data.ownerName);
+        } else {
+          setError(data.error || "Failed to fetch file details.");
+        }
+      } catch (err) {
+        setError("An unexpected error occurred.");
+      }
+    };
+
+    if (fileId) {
+      fetchMetadata();
+    }
+  }, [fileId]);
 
   const handleDownload = async () => {
-    try {
-      setDownloading(true);
-      setError('');
+    setIsDownloading(true);
+    setDownloadProgress(0);
 
-      const response = await fetch(`/api/download/${params.fileId}`);
+    try {
+      const response = await fetch(`/api/download/${fileId}`);
 
       if (!response.ok) {
         const errorData = await response.json();
-        setError(errorData.error || 'Download failed');
+        setError(errorData.message || "Failed to download file.");
+        setIsDownloading(false);
         return;
       }
 
-      // Get filename from Content-Disposition header
-      const contentDisposition = response.headers.get('Content-Disposition');
-      const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
-      const filename = filenameMatch ? filenameMatch[1] : 'download';
+      const contentLength = response.headers.get("Content-Length");
+      const total = parseInt(contentLength, 10);
+      let loaded = 0;
 
-      // Download file
-      const blob = await response.blob();
+      const reader = response.body.getReader();
+      const chunks = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        chunks.push(value);
+        loaded += value.length;
+        setDownloadProgress(Math.round((loaded / total) * 100));
+      }
+
+      const blob = new Blob(chunks, {
+        type: response.headers.get("Content-Type"),
+      });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = filename;
+      a.download = fileName || "download";
       document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-    } catch (error) {
-      console.error('Download error:', error);
-      setError('Failed to download file');
-    } finally {
-      setDownloading(false);
+      setIsDownloading(false);
+      setDownloadProgress(100);
+    } catch (err) {
+      console.error("Download error:", err);
+      setError("An unexpected error occurred during download.");
+      setIsDownloading(false);
+      setDownloadProgress(0);
     }
   };
 
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md text-center">
+          <h1 className="text-xl font-semibold text-red-500 mb-4 text-black">Error</h1>
+          <p className="text-black">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!fileName && !isDownloading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4">
+        <p className="text-black">Loading file details...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md text-center">
-        <h1 className="text-2xl font-bold mb-4">Download File</h1>
-        
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded">
-            {error}
-          </div>
-        )}
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+      <Image
+        src={Background}
+        alt="background"
+        className="w-full h-full absolute top-0 left-0 z-10"
+      />
 
-        <button
-          onClick={handleDownload}
-          disabled={downloading}
-          className={`w-full py-3 px-4 rounded-md text-white ${
-            downloading
-              ? 'bg-gray-400'
-              : 'bg-blue-500 hover:bg-blue-600'
-          }`}
-        >
-          {downloading ? 'Downloading...' : 'Download File'}
-        </button>
-
-        <p className="mt-4 text-sm text-gray-600">
-          🔒 This file is encrypted and will be decrypted during download
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md text-center z-50 flex flex-col justify-center items-center">
+        <h1 className="text-xl font-semibold mb-4 text-black">Download File</h1>
+        <p className="mb-4 text-black">
+          Download <strong>{fileName}</strong> by <strong>{ownerName}</strong>
         </p>
+        {isDownloading && <CircularProgressBar progress={downloadProgress} />}
+        <Button onClick={handleDownload} className="w-full mt-4">
+          Download
+        </Button>
       </div>
     </div>
   );

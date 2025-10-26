@@ -1,7 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import toast from 'react-hot-toast';
+import { useDropzone } from 'react-dropzone';
+import Image from 'next/image';
+import Background from "@/assets/background.jpg";
 
 export default function UploadPage() {
   const { data: session, status } = useSession();
@@ -11,21 +17,40 @@ export default function UploadPage() {
   const [expiryHours, setExpiryHours] = useState(24);
   const [expiresAt, setExpiresAt] = useState('');
 
+  const onDrop = useCallback((acceptedFiles) => {
+    if (acceptedFiles.length > 0) {
+      setFile(acceptedFiles[0]);
+      toast.success(`File selected: ${acceptedFiles[0].name}`);
+    }
+  }, []);
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    onDrop,
+    multiple: false,
+  });
+
   const handleFileChange = (e) => {
-    if (e.target.files) {
+    if (e.target.files && e.target.files.length > 0) {
       setFile(e.target.files[0]);
+      toast.success(`File selected: ${e.target.files[0].name}`);
     }
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!file) {
+      toast.error('Please select a file to upload.');
+      return;
+    }
+
+    const owner = session?.user.name;
 
     try {
       setUploading(true);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('expiryHours', expiryHours.toString());
+      formData.append('owner', owner);
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -34,14 +59,16 @@ export default function UploadPage() {
 
       const data = await response.json();
 
-      if (data.shareableUrl) {
+      if (response.ok && data.shareableUrl) {
         setShareableUrl(data.shareableUrl);
         setExpiresAt(new Date(data.expiresAt).toLocaleString());
-        alert('File uploaded and encrypted successfully!');
+        toast.success('File uploaded and encrypted successfully!');
+      } else {
+        toast.error(data.error || 'Error uploading file.');
       }
     } catch (error) {
       console.error('Error uploading file:', error);
-      alert('Error uploading file.');
+      toast.error('Error uploading file.');
     } finally {
       setUploading(false);
     }
@@ -49,80 +76,104 @@ export default function UploadPage() {
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareableUrl);
-    alert('Link copied to clipboard!');
+    toast.success('Link copied to clipboard!');
   };
 
   if (status === "loading") {
-    return <p>Loading...</p>;
+    return <p className="text-black">Loading...</p>;
   }
 
   if (status === "unauthenticated") {
-    return <p>Access Denied</p>;
+    return <p className="text-black">Access Denied</p>;
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4">
-      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md">
-        <h1 className="text-2xl font-bold mb-4">Secure File Upload</h1>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative">
+      <Image src={Background} alt='background' className='w-full h-full absolute top-0 left-0 z-10'/>
+      <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-md z-50">
+        <h1 className="text-lg font-semibold mb-4 text-black">Secure File Upload</h1>
         
         <form onSubmit={handleUpload} className="space-y-4">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4">
-            <input
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer ${isDragActive ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-gray-50'}`}
+          >
+            <input {...getInputProps()} />
+            {isDragActive ? (
+              <p className="text-black">Drop the files here ...</p>
+            ) : (
+              <p className="text-black">Drag 'n' drop some files here, or click to select files</p>
+            )}
+            {file && <p className="mt-2 text-sm text-black">Selected file: {file.name}</p>}
+          </div>
+
+          <div className="flex items-center justify-center my-4">
+            <span className="text-black">OR</span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 text-black">
+              Manual File Upload
+            </label>
+            <Input
               type="file"
               onChange={handleFileChange}
-              className="w-full"
+              className="w-full text-black"
               disabled={uploading}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">
+            <label className="block text-sm font-medium mb-2 text-black">
               Expiry Time (hours)
             </label>
-            <input
+            <Input
               type="number"
               min="1"
               max="168"
               value={expiryHours}
               onChange={(e) => setExpiryHours(parseInt(e.target.value))}
-              className="w-full p-2 border border-gray-300 rounded"
+              className="w-full p-2 border border-gray-300 rounded text-black"
             />
           </div>
           
-          <button
+          <Button
             type="submit"
             disabled={!file || uploading}
-            className={`w-full py-2 px-4 rounded-md text-white ${
-              !file || uploading
-                ? 'bg-gray-400'
-                : 'bg-blue-500 hover:bg-blue-600'
-            }`}
+            className="w-full"
           >
-            {uploading ? 'Uploading & Encrypting...' : 'Upload'}
-          </button>
+            {uploading ? (
+              <div className="flex items-center justify-center space-x-2 text-black">
+                <CircularProgressBar progress={uploadProgress} />
+                <span>Uploading...</span>
+              </div>
+            ) : (
+              'Upload'
+            )}
+          </Button>
+          <Button onClick={() => signOut()} className="w-full text-black">Signout</Button>
         </form>
 
         {shareableUrl && (
           <div className="mt-4 p-4 bg-green-50 rounded-lg">
-            <p className="text-sm font-medium text-green-800 mb-2">
-              File uploaded successfully! 🔒
+            <p className="text-sm font-medium text-green-800 mb-2 text-black">
+              File uploaded successfully!
             </p>
-            <p className="text-xs text-gray-600 mb-2">
+            <p className="text-sm text-gray-600 mb-2 text-black">
               Expires: {expiresAt}
             </p>
             <div className="flex gap-2">
-              <input
+              <Input
                 type="text"
                 value={shareableUrl}
                 readOnly
-                className="flex-1 p-2 text-sm border border-gray-300 rounded"
+                className="flex-1 p-2 text-sm border border-gray-300 rounded text-black"
               />
-              <button
+              <Button
                 onClick={copyToClipboard}
-                className="px-4 py-2 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
               >
                 Copy
-              </button>
+              </Button>
             </div>
           </div>
         )}
